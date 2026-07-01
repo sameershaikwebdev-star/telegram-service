@@ -23,7 +23,8 @@ GROQ_BASE_URL = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1"
 
 MONGODB_URI = os.environ.get("MONGODB_URI", "")
 
-# How many past messages (per user) to include as context for the LLM
+DB_PATH = os.environ.get("DB_PATH", "bot.db")
+
 HISTORY_LIMIT = int(os.environ.get("HISTORY_LIMIT", "10"))
 
 SYSTEM_PROMPT = os.environ.get(
