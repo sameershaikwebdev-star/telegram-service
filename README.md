@@ -1,124 +1,182 @@
-# Telegram LLM Bot (Python, Groq, SQLite, Webhooks)
+# Sameer AI Platform 2 — Telegram Service
 
-A Telegram bot that holds a real conversation using a **free, hosted LLM via
-Groq** (OpenAI-compatible API, generous free tier, serves open models like
-Llama), persists per-chat conversation history in **SQLite**, and receives
-messages via a **webhook** (Flask) rather than polling.
+> The first working service of **Sameer AI Platform 2**.
 
-Built to demonstrate: Telegram Bot API integration, webhook handling,
-conversation-state storage, and LLM integration — in Python.
+---
 
-## Architecture
+## Overview
 
-```
-Telegram → POST /webhook/<secret> → Flask (app.py)
-                                        │
-                                        ▼
-                              bot/handlers.py (routes commands, orchestrates)
-                                   │              │
-                                   ▼              ▼
-                          bot/db.py (SQLite)  bot/llm.py (Groq)
-                                   │
-                                   ▼
-                          bot/telegram.py (sendMessage back to user)
-```
+This repository contains the **Telegram Service**, the first completed component of **Sameer AI Platform 2** — a modular AI platform designed to support multiple communication channels, AI services, authentication, notifications, databases, and web/mobile clients.
 
-- `app.py` — Flask app, webhook route, health check.
-- `bot/config.py` — env-var driven config.
-- `bot/db.py` — SQLite storage for per-chat message history.
-- `bot/llm.py` — calls Groq's chat completions API.
-- `bot/telegram.py` — thin Telegram Bot API client.
-- `bot/handlers.py` — ties it together: slash commands (`/start`, `/reset`)
-  and the main conversational flow.
-- `scripts/set_webhook.py` — one-off helper to register your webhook URL.
+Rather than building a single large application, the platform grows incrementally with independent services that can evolve without affecting one another. The Telegram Service is the first completed module.
 
-## Setup
+---
 
-### 1. Create your Telegram bot
+## Features
 
-Message **@BotFather** on Telegram → `/newbot` → follow prompts → copy the
-token. Keep it secret — never paste it into code, chat, or commits.
+- Telegram Bot API via **webhooks** (Flask)
+- **Groq LLM** integration — Llama 3.3 70B, free tier
+- **MongoDB Atlas** or **SQLite** conversation history (switchable via `DB_BACKEND`)
+- Per-chat context window with configurable history depth
+- `/start` and `/reset` commands
+- Graceful error handling — no silent failures
+- **Docker** support
 
-### 2. Get a free Groq API key
+---
 
-Sign up at [console.groq.com](https://console.groq.com/keys) and create an
-API key. Free tier is rate-limited but ample for a personal bot.
+## Quick Start
 
-### 3. Configure environment
+### 1. Get your credentials
+
+| Credential | Where |
+|---|---|
+| Telegram Bot Token | Message **@BotFather** → `/newbot` |
+| Groq API Key | [console.groq.com/keys](https://console.groq.com/keys) — free tier |
+| MongoDB URI *(optional)* | [mongodb.com/atlas](https://www.mongodb.com/atlas) — free cluster |
+
+### 2. Configure
 
 ```bash
 cp .env.example .env
-# edit .env: paste TELEGRAM_BOT_TOKEN, GROQ_API_KEY
+# Open .env and fill in TELEGRAM_BOT_TOKEN and GROQ_API_KEY
 ```
 
-`.env` is gitignored — your secrets never get committed.
-
-### 4. Install dependencies
+### 3. Install and run
 
 ```bash
 python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 5. Run locally
-
-```bash
 flask --app app run --port 8000
 ```
 
-Telegram webhooks require a **public HTTPS URL**, so for local testing expose
-your local server with a tunnel, e.g. [ngrok](https://ngrok.com):
+### 4. Expose locally and register webhook
+
+Telegram requires a public HTTPS URL. Use [ngrok](https://ngrok.com) for local testing:
 
 ```bash
 ngrok http 8000
-```
-
-Then register the webhook (use the `https://...ngrok-free.app` URL ngrok gives you):
-
-```bash
 python scripts/set_webhook.py https://your-ngrok-url.ngrok-free.app
 ```
 
-Message your bot on Telegram — it should reply using Groq.
+Message your bot — it should reply using Groq.
 
-### 6. Commands
+---
 
-- `/start` — greeting
-- `/reset` — clears your conversation history for that chat
+## Environment Variables
 
-## Deploying for real
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | ✅ | — | From @BotFather |
+| `GROQ_API_KEY` | ✅ | — | From console.groq.com/keys |
+| `DB_BACKEND` | — | `sqlite` | `sqlite` or `mongodb` |
+| `MONGODB_URI` | if mongodb | — | Atlas connection string |
+| `TELEGRAM_WEBHOOK_SECRET` | — | auto-generated | Secret path segment in webhook URL |
+| `GROQ_MODEL` | — | `llama-3.3-70b-versatile` | Any Groq-supported model |
+| `HISTORY_LIMIT` | — | `10` | Messages sent to LLM as context |
+| `DB_PATH` | — | `bot.db` | SQLite file path |
 
-`Dockerfile` is included for containerized deployment (Render, Railway,
-Fly.io, a VPS, etc.) — all of which have free tiers suitable for this. Since
-Groq is a hosted API, there's no extra service to run alongside your bot
-(unlike a local-model setup).
+---
+
+## Project Structure
+
+```
+services/telegram-service/
+├── app.py                  # Flask app, webhook route, health check
+├── bot/
+│   ├── config.py           # Env-var driven configuration
+│   ├── db.py               # Storage backend (SQLite or MongoDB, same API)
+│   ├── handlers.py         # Command routing and conversational flow
+│   ├── llm.py              # Groq API client
+│   └── telegram.py         # Telegram Bot API client
+├── scripts/
+│   └── set_webhook.py      # One-off helper to register the webhook URL
+├── Dockerfile
+├── requirements.txt
+└── .env.example
+```
+
+---
+
+## Docker
 
 ```bash
-docker build -t telegram-llm-bot .
-docker run -p 8000:8000 --env-file .env telegram-llm-bot
+docker build -t telegram-service .
+docker run -p 8000:8000 --env-file .env telegram-service
 ```
 
 After deploying, re-run `scripts/set_webhook.py` with your real public URL.
 
-## Security notes
+---
 
-- Never commit `.env` (it's gitignored).
-- Never paste your bot token or Groq API key into chat, screenshots, or
-  commits — if either leaks, rotate it immediately (BotFather → `/mybots` →
-  API Token → Revoke; Groq console → delete/regenerate the key).
-- The webhook path includes a random secret (`TELEGRAM_WEBHOOK_SECRET`) so
-  it can't be triggered by random requests guessing `/webhook`.
-- `bot.db` (SQLite file) is gitignored — it will contain real conversation
-  content once you run the bot.
+## Platform Vision
 
-## JD skills this demonstrates
+Sameer AI Platform 2 is designed to grow into a full multi-service ecosystem:
 
-- Telegram Bot API integration (webhooks, not polling)
-- Backend bot logic in Python
-- REST API integration with async-style request/response handling
-- SQLite for conversation state
-- LLM API integration (Groq, OpenAI-compatible) with prompt design
-- Containerized deployment (Docker)
-- Reliability: errors are caught, logged, and reported back to the user
-  rather than failing silently
+```
+Telegram / WhatsApp / Web / Mobile
+              │
+              ▼
+     API Gateway (Spring Boot)
+              │
+   ┌──────────┼──────────────┐
+   │          │              │
+   ▼          ▼              ▼
+Telegram   AI Service   WhatsApp
+Service                  Service
+   │          │              │
+   └──────────┼──────────────┘
+              │
+   ┌──────────┼──────────────┐
+   │          │              │
+   ▼          ▼              ▼
+Database   Auth         Notification
+Service    Service       Service
+```
+
+### Roadmap
+
+| Phase | Service | Status |
+|-------|---------|--------|
+| 1 | Telegram Service | ✅ Complete |
+| 2 | Spring Boot API Gateway | 🚧 Planned |
+| 3 | AI Service | 🚧 Planned |
+| 4 | Database Service | 🚧 Planned |
+| 5 | WhatsApp Service | 🚧 Planned |
+| 6 | Authentication Service | 🚧 Planned |
+| 7 | Notification Service | 🚧 Planned |
+| 8 | React Dashboard | 🚧 Planned |
+| 9 | Mobile Application | 🚧 Planned |
+| 10 | Kubernetes Deployment | 🚧 Planned |
+
+### Technology Stack
+
+| Layer | Current | Planned |
+|-------|---------|---------|
+| Backend | Python, Flask | Spring Boot, FastAPI, Node.js |
+| AI | Groq (Llama) | Local LLMs, vision models |
+| Database | MongoDB Atlas, SQLite | Vector DB, Redis |
+| Frontend | — | React, Flutter |
+| Infrastructure | Docker | Docker Compose, Kubernetes, Nginx |
+
+---
+
+## Security
+
+- Never hardcode secrets — all credentials live in `.env` (gitignored)
+- If a token is ever pasted into a chat, screenshot, or commit: **revoke it immediately**
+  - Telegram: @BotFather → `/mybots` → API Token → Revoke
+  - Groq: console.groq.com → delete and regenerate the key
+- The webhook URL includes a random secret so it cannot be triggered by arbitrary requests
+
+---
+
+## Philosophy
+
+This project follows a **modular-first** architecture. Instead of splitting everything into microservices from day one, the platform starts with a single working service and expands as new functionality is needed. This provides a stable foundation while maintaining a clear migration path toward a scalable distributed architecture.
+
+---
+
+## License
+
+MIT
